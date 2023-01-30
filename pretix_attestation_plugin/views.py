@@ -16,8 +16,10 @@ class PluginSettingsView(EventSettingsViewMixin, FormView):
         kwargs = super().get_form_kwargs()
         try:
             kwargs["current_base_url"] = models.BaseURL.objects.get(event=self.request.event).string_url
+            kwargs["upload"] = models.KeyFile.objects.get(event=self.request.event).upload
         except models.BaseURL.DoesNotExist:
             kwargs["current_base_url"] = "Not set yet"
+            kwargs["upload"] = "Not uploaded yet"
         return kwargs
 
     def form_valid(self, form):

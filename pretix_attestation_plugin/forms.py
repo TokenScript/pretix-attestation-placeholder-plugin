@@ -1,4 +1,5 @@
 import re
+import os
 
 from OpenSSL import crypto
 
@@ -50,19 +51,25 @@ class BaseURLField(forms.CharField):
 
 
 class PluginSettingsForm(forms.Form):
-    def __init__(self, current_base_url="None", *args, **kwargs):
+
+    upload = ""
+    keyfile = False
+
+    def __init__(self, current_base_url="None", upload="", *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.fields["base_url"] = BaseURLField(
             label=_('Base URL'),
-            help_text=_("Type in a Base URL address. Current url: {url}").format(
+            help_text=_("Type in a Base URL address. Current url: <b>{url}</b>").format(
                 url=str(current_base_url)
             ),
             required=False,
+            initial=str(current_base_url)
         )
 
-    keyfile = KeyPemFile(
-        help_text=_("""Upload a '.pem' key file holding a key in RFC 5915 format. <br>
-            You can generate it like this: <strong>openssl ecparam -name secp256k1 -genkey -noout -out key.pem</strong>"""),
-        required=False,
-    )
+        self.fields["keyfile"] = KeyPemFile(
+            label=_('Private Key PEM file for ticket Attestation'),
+            help_text=_("""Upload a '.pem' key file holding a key in RFC 5915 format. <br>
+                You can generate it like this: <strong>openssl ecparam -name secp256k1 -genkey -noout -out key.pem</strong><br><br><strong>""" + (("Uploaded file:{}".format(os.path.basename(upload.file.name)) if type(upload) is not str else "Not set yet") + "</strong>")),
+            required=False,
+        )

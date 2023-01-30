@@ -3,6 +3,14 @@ from subprocess import Popen, PIPE
 
 from pretix.base.models import OrderPosition
 
+from ..models import (
+    AttestationLink,
+    BaseURL,
+    KeyFile,
+)
+
+from django.utils.translation import gettext_lazy as _
+
 """
 A key indicates .pem file in RFC 5915 format.
 
@@ -10,6 +18,38 @@ Before using this generator, key needs to be uploaded through form.
 `Attestation Plugin Settings` can be used for that.
 """
 
+# attendee_attestation_link
+def order_position_attestation_link(event, position):
+    
+    try:
+        path_to_key = KeyFile.objects.get(event=event).upload.path
+    except KeyFile.DoesNotExist:
+        raise( _("Could not generate attestation URL - please contact support@devcon.org (error 2)") )
+    
+    if not AttestationLink.objects.filter(order_position=position).exists():
+        try:
+            link = generate_link(position, path_to_key)
+        except ValueError:
+            raise( _("Could not generate attestation URL - please contact support@devcon.org (error 3)") )
+
+        AttestationLink.objects.update_or_create(
+            order_position=position,
+            defaults={"string_url": link},
+        )
+
+    try:
+        base_url = BaseURL.objects.get(event=event).string_url
+    except BaseURL.DoesNotExist:
+        raise( _("Could not generate attestation URL - please contact support@devcon.org (error 1)") )
+
+    try:
+        return "{base_url}{link}".format(
+            base_url=base_url,
+            link=str(AttestationLink.objects.get(order_position=position).string_url)
+        )
+
+    except AttestationLink.DoesNotExist:
+        raise( _("Could not generate attestation URL - please contact support@devcon.org (error 4)") )
 
 def generate_link(order_position: OrderPosition,
                   path_to_key: str,
