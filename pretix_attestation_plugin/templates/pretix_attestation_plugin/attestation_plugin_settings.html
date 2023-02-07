@@ -9,10 +9,21 @@
             <legend>{% trans "Attestation Plugin Settings" %}</legend>
             {% bootstrap_form form layout="horizontal" %}
         </fieldset>
+        {% if run_sign %}
+        <div class="oleh">
+            <a href="{{ run_sign }}" class="btn btn-primary" >Validate MagicLinks</a>
+            <p></p>
+            <div class="alert alert-info">
+                <p>Validation result: {{ validation_result }}</p>
+            </div>
+        </div>
+        {% endif %}
         <div class="form-group submit-group">
             <button type="submit" class="btn btn-primary btn-save">
                 {% trans "Update" %}
             </button>
         </div>
     </form>
+    
+    
 {% endblock %}
