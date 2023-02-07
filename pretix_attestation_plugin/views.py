@@ -7,20 +7,17 @@ from pretix.control.views.event import EventSettingsViewMixin
 from . import forms, models
 from pretix.base.models import Order, OrderPosition
 
-import asn1
 
-import urllib.parse
 
 from .models import (
     KeyFile,
 )
 
 from os import path
-
+import asn1
+import urllib.parse
 from OpenSSL import crypto
-
 import base64
-
 import eth_keys
 
 def get_public_key_in_hex(event):
