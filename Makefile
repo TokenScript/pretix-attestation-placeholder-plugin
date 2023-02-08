@@ -51,7 +51,6 @@ drun3:
     -v /etc/pretix:/etc/pretix \
     --sysctl net.core.somaxconn=4096 \
 	--rm \
-	--name mypretix \
 	-d \
     mypretix
 

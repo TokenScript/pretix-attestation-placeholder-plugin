@@ -1,0 +1,15 @@
+services:
+
+  scanner:
+    build: ./
+    networks:
+    - shared_net
+    ports:
+      - 8345:80
+    volumes:
+      - /var/pretix-data:/data
+      - /etc/pretix:/etc/pretix
+
+networks:
+  shared_net:
+    driver: bridge
