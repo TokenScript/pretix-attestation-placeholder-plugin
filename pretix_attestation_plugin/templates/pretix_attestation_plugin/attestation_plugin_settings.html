@@ -10,11 +10,15 @@
             {% bootstrap_form form layout="horizontal" %}
         </fieldset>
         {% if run_sign %}
-        <div class="oleh">
+        <div class="oleh1">
             <a href="{{ run_sign }}" class="btn btn-primary" >Validate MagicLinks</a>
             <p></p>
-            <div class="alert alert-info">
+            <div class="alert alert-info" data-regenerate="{{regenerate_atts_url}}">
                 <p>Validation result: {{ validation_result }}</p>
+                {% if regenerate_atts_url %}
+                    <br/>
+                    <a href="{{ regenerate_atts_url }}" class="btn btn-primary" >Regenerate Broken MagicLinks</a>
+                {% endif %}
             </div>
         </div>
         {% endif %}

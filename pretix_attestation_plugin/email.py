@@ -1,7 +1,7 @@
 from pretix.base.email import BaseMailTextPlaceholder
 from django.utils.translation import gettext_lazy as _
 
-from .generator.java_generator_wrapper import generate_link, order_position_attestation_link
+from .generator.java_generator_wrapper import order_position_attestation_link, event_base_url, get_private_key_path
 
 """
 We need to register two email placeholders under the same name,
@@ -25,11 +25,13 @@ class OrderAttestationPlaceholder(BaseMailTextPlaceholder):
         order = context['order']
         event = context["event"]
 
+        base_url = event_base_url(event)
+        path_to_key = get_private_key_path(event)
+
         for position in order.positions.all():
             if position.attendee_email == order.email:
                 try:
-                    attestation_text = order_position_attestation_link(event, position)
-                    print(attestation_text)
+                    attestation_text = order_position_attestation_link(position, base_url, path_to_key)
                     return attestation_text
 
                 except Exception as e: return(e)   
@@ -55,8 +57,11 @@ class PositionAttestationPlaceholder(BaseMailTextPlaceholder):
         position = context["position"]
         event = context["event"]
 
+        base_url = event_base_url(event)
+        path_to_key = get_private_key_path(event)
+
         try:
-            attestation_text = order_position_attestation_link(event, position)
+            attestation_text = order_position_attestation_link(position, base_url, path_to_key)
             print("Attestation generated: "+attestation_text)
             return attestation_text
             

@@ -11,6 +11,12 @@ from ..models import (
 
 from django.utils.translation import gettext_lazy as _
 
+import asn1
+import urllib.parse
+from OpenSSL import crypto
+import base64
+import eth_keys
+
 """
 A key indicates .pem file in RFC 5915 format.
 
@@ -18,29 +24,96 @@ Before using this generator, key needs to be uploaded through form.
 `Attestation Plugin Settings` can be used for that.
 """
 
-# attendee_attestation_link
-def order_position_attestation_link(event, position):
-    
+def get_private_key_path(event):
+
     try:
         path_to_key = KeyFile.objects.get(event=event).upload.path
     except KeyFile.DoesNotExist:
         raise( _("Could not generate attestation URL - please contact support@devcon.org (error 2)") )
+
+    if not path.isfile(path_to_key):
+        raise ValueError(f'Key file not found in {path_to_key}')
     
-    if not AttestationLink.objects.filter(order_position=position).exists():
-        try:
-            link = generate_link(position, path_to_key)
-        except ValueError:
-            raise( _("Could not generate attestation URL - please contact support@devcon.org (error 3)") )
+    return path_to_key
 
-        AttestationLink.objects.update_or_create(
-            order_position=position,
-            defaults={"string_url": link},
-        )
 
+def get_private_key(event):
+    path_to_key = get_private_key_path(event=event)
+
+    with open(path_to_key, 'r') as file:
+        key_data = file.read()
+
+    return crypto.load_privatekey(crypto.FILETYPE_PEM, key_data)
+    
+
+def get_public_key_in_hex(priv_key):
+
+    pub_key_data = priv_key.to_cryptography_key().public_key().public_numbers()
+
+    x_bytes = pub_key_data.x.to_bytes(32, 'big')
+    y_bytes = pub_key_data.y.to_bytes(32, 'big')
+
+    return "0x" + ''.join('{:02x}'.format(x) for x in (x_bytes+y_bytes))
+
+
+def verify_magic_link(public_key_in_hex, magic_link_params):
+    parsed = urllib.parse.urlparse(magic_link_params)
+    params = urllib.parse.parse_qs(parsed.query)
+
+    ticket_attestation = params['ticket'][0]
+
+    ticketbytes = base64.urlsafe_b64decode(ticket_attestation + '=' * (4 - len(ticket_attestation) % 4))
+
+    # read ticket sequence
+    decoder = asn1.Decoder()
+    decoder.start(ticketbytes)
+    tag, value = decoder.read()
+
+    # read ticket body and signature from prev sequence content
+    decoder.start(value)
+    tag, value = decoder.read()
+    # wrap in sequence
+    ticket_body = b'\x30'+bytes([len(value)])+value
+
+    tag, value = decoder.read()
+    ticket_signature = bytearray(value)
+    # have to replace last byte 1b -> 00 1c -> 01
+    if ticket_signature[-1] >= 27:
+        ticket_signature[-1] -= 27
+
+    # make Signature object to validate data         
+    signature = eth_keys.keys.Signature(ticket_signature)
+    signerRecoveredPubKey = signature.recover_public_key_from_msg(ticket_body)
+
+    if str(signerRecoveredPubKey) == public_key_in_hex:
+        return True
+    
+    return False
+
+
+def event_base_url(event):
     try:
-        base_url = BaseURL.objects.get(event=event).string_url
+        return BaseURL.objects.get(event=event).string_url
     except BaseURL.DoesNotExist:
         raise( _("Could not generate attestation URL - please contact support@devcon.org (error 1)") )
+
+def regenerate_att_link(position, path_to_key):
+    try:
+        link = generate_link(position, path_to_key)
+    except ValueError:
+        raise( _("Could not generate attestation URL - please contact support@devcon.org (error 3)") )
+
+    AttestationLink.objects.update_or_create(
+        order_position=position,
+        defaults={"string_url": link},
+    )
+
+
+# attendee_attestation_link
+def order_position_attestation_link(position, base_url, path_to_key):
+    
+    if not AttestationLink.objects.filter(order_position=position).exists():
+        regenerate_att_link(position, path_to_key)
 
     try:
         return "{base_url}{link}".format(

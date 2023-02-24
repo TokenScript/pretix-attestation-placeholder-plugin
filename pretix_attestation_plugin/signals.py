@@ -17,7 +17,7 @@ from pretix.base.secrets import (
 
 from pretix.base.models import Item, ItemVariation, SubEvent
 
-from .generator.java_generator_wrapper import order_position_attestation_link
+from .generator.java_generator_wrapper import order_position_attestation_link, event_base_url, get_private_key_path
 
 import urllib.parse
 
@@ -64,10 +64,13 @@ def update_ticket_secret(sender, **kwargs):
     order = kwargs['order']
     event = sender
 
+    base_url = event_base_url(event)
+    path_to_key = get_private_key_path(event)
+
     if event.ticket_secret_generator.identifier == RandomTicketSecretGeneratorCustom.identifier:
         for op in order.positions.all():
             try: 
-                attestation_link = order_position_attestation_link(event, op)
+                attestation_link = order_position_attestation_link(op, base_url, path_to_key)
                 parsed = urllib.parse.urlparse(attestation_link)
                 params = urllib.parse.parse_qs(parsed.query)
 

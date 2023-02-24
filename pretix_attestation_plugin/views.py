@@ -7,73 +7,7 @@ from pretix.control.views.event import EventSettingsViewMixin
 from . import forms, models
 from pretix.base.models import Order, OrderPosition
 
-
-
-from .models import (
-    KeyFile,
-)
-
-from os import path
-import asn1
-import urllib.parse
-from OpenSSL import crypto
-import base64
-import eth_keys
-
-def get_public_key_in_hex(event):
-    key_data = None
-    priv_key = None
-
-    path_to_key = KeyFile.objects.get(event=event).upload.path
-
-    if not path.isfile(path_to_key):
-        raise ValueError(f'Key file not found in {path_to_key}')
-    with open(path_to_key, 'r') as file:
-        key_data = file.read()
-
-    priv_key = crypto.load_privatekey(crypto.FILETYPE_PEM, key_data)
-    pub_key_data = priv_key.to_cryptography_key().public_key().public_numbers()
-
-    x_bytes = pub_key_data.x.to_bytes(32, 'big')
-    y_bytes = pub_key_data.y.to_bytes(32, 'big')
-
-    return "0x" + ''.join('{:02x}'.format(x) for x in (x_bytes+y_bytes))
-
-
-def verify_magic_link(public_key_in_hex, magic_link_params):
-    parsed = urllib.parse.urlparse(magic_link_params)
-    params = urllib.parse.parse_qs(parsed.query)
-
-    ticket_attestation = params['ticket'][0]
-
-    ticketbytes = base64.urlsafe_b64decode(ticket_attestation + '=' * (4 - len(ticket_attestation) % 4))
-
-    # read ticket sequence
-    decoder = asn1.Decoder()
-    decoder.start(ticketbytes)
-    tag, value = decoder.read()
-
-    # read ticket body and signature from prev sequence content
-    decoder.start(value)
-    tag, value = decoder.read()
-    # wrap in sequence
-    ticket_body = b'\x30'+bytes([len(value)])+value
-
-    tag, value = decoder.read()
-    ticket_signature = bytearray(value)
-    # have to replace last byte 1b -> 00 1c -> 01
-    if ticket_signature[-1] >= 27:
-        ticket_signature[-1] -= 27
-
-    # make Signature object to validate data         
-    signature = eth_keys.keys.Signature(ticket_signature)
-    signerRecoveredPubKey = signature.recover_public_key_from_msg(ticket_body)
-
-    if str(signerRecoveredPubKey) == public_key_in_hex:
-        return True
-    
-    return False
-
+from .generator.java_generator_wrapper import get_private_key, get_public_key_in_hex, verify_magic_link, get_private_key_path, regenerate_att_link
 
 class PluginSettingsView(EventSettingsViewMixin, FormView):
     form_class = forms.PluginSettingsForm
@@ -83,35 +17,61 @@ class PluginSettingsView(EventSettingsViewMixin, FormView):
     def get_context_data(self, **kwargs):
         kwargs["run_sign"] = self.request.build_absolute_uri("?validate_magic_links=1")
         kwargs["validation_result"] = "Unknown"
+        regenerate = self.request.GET.get("regenerate_magic_links")
 
         if (self.request.GET.get("validate_magic_links")):
             valid_atts = 0
             invalid_atts = 0
-            total_atts = 0
+            total_ops = 0
+            regenerated_atts = 0
             try:
                 current_event = self.request.event
-                public_key_in_hex = get_public_key_in_hex(event = current_event)
+                priv_key = get_private_key(event = current_event)
+                public_key_in_hex = get_public_key_in_hex(priv_key = priv_key)
+                path_to_key = get_private_key_path(current_event)
 
                 orders = Order.objects.filter(event = current_event)
-                op = OrderPosition.objects.filter(order__in = orders)
-                atts = models.AttestationLink.objects.filter(order_position__in = op)
+                ops = OrderPosition.objects.filter(order__in = orders)
 
-                total_atts = atts.count()
-                for a in atts:
-
+                total_ops = ops.count()
+                for op in ops:
+                    att_is_valid = True
+                    
                     try:
-                        magic_link_params = a.string_url
-                        signature_ok = verify_magic_link(public_key_in_hex, magic_link_params=magic_link_params)
-                        if signature_ok:
-                            valid_atts += 1
-                        else:
-                            invalid_atts += 1
-                    except:
-                        invalid_atts += 1
-                
-                kwargs["validation_result"] = f"Total tickets: {total_atts}, valid: {valid_atts}, invalid: {invalid_atts}"
+                        a = models.AttestationLink.objects.filter(order_position=op)
+                        if not a.exists():
+                            raise("No attestation for this ticket")
+                        
+                        magic_link_params = a[0].string_url
+                        signature_ok = verify_magic_link(public_key_in_hex, magic_link_params)
+                        if not signature_ok:
+                            att_is_valid = False
 
-            except:
+                    except: 
+                        att_is_valid = False
+                    
+                    if not att_is_valid:
+                        # regenerate
+                        if regenerate:
+                            try:
+                                regenerate_att_link(op, path_to_key)
+                                att_is_valid = True
+                                regenerated_atts += 1
+                            except:
+                                pass
+
+                    if att_is_valid:
+                        valid_atts += 1
+                    else:
+                        invalid_atts += 1
+                                    
+                regenerated_str = f", regenerated: {regenerated_atts}" if regenerate else ""
+                kwargs["validation_result"] = f"Total tickets: {total_ops}, valid: {valid_atts}, invalid: {invalid_atts}{regenerated_str}"
+
+                if invalid_atts > 0 and not regenerate:
+                    kwargs["regenerate_atts_url"] = self.request.build_absolute_uri("?regenerate_magic_links=1&validate_magic_links=1")
+
+            except: 
                 kwargs["validation_result"] = "Can't read private key"
 
         return super().get_context_data(**kwargs)
