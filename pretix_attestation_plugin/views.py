@@ -7,7 +7,9 @@ from pretix.control.views.event import EventSettingsViewMixin
 from . import forms, models
 from pretix.base.models import Order, OrderPosition
 
-from .generator.java_generator_wrapper import get_private_key, get_public_key_in_hex, verify_magic_link, get_private_key_path, regenerate_att_link
+from .generator.java_generator_wrapper import get_private_key, get_public_key_in_hex, verify_magic_link, get_private_key_path, regenerate_att_link, order_position_attestation_link
+
+import urllib.parse
 
 class PluginSettingsView(EventSettingsViewMixin, FormView):
     form_class = forms.PluginSettingsForm
@@ -55,6 +57,16 @@ class PluginSettingsView(EventSettingsViewMixin, FormView):
                         if regenerate:
                             try:
                                 regenerate_att_link(op, path_to_key)
+
+                                attestation_link = order_position_attestation_link(op, "https://some.url", path_to_key)
+                                parsed = urllib.parse.urlparse(attestation_link)
+                                params = urllib.parse.parse_qs(parsed.query)
+
+                                ticket_attestation = params['ticket'][0]
+
+                                op.secret = ticket_attestation 
+                                op.save()
+
                                 att_is_valid = True
                                 regenerated_atts += 1
                             except:
