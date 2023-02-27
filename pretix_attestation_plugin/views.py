@@ -11,6 +11,9 @@ from .generator.java_generator_wrapper import get_private_key, get_public_key_in
 
 import urllib.parse
 
+import logging
+logger = logging.getLogger(__name__)
+
 class PluginSettingsView(EventSettingsViewMixin, FormView):
     form_class = forms.PluginSettingsForm
     template_name = 'pretix_attestation_plugin/attestation_plugin_settings.html'
@@ -51,26 +54,23 @@ class PluginSettingsView(EventSettingsViewMixin, FormView):
 
                     except: 
                         att_is_valid = False
+
                     
-                    if not att_is_valid:
-                        # regenerate
-                        if regenerate:
-                            try:
-                                regenerate_att_link(op, path_to_key)
+                    if (not att_is_valid) and regenerate:
 
-                                attestation_link = order_position_attestation_link(op, "https://some.url", path_to_key)
-                                parsed = urllib.parse.urlparse(attestation_link)
-                                params = urllib.parse.parse_qs(parsed.query)
+                        try:
+                            regenerate_att_link(op, path_to_key)
+                            attestation_link = order_position_attestation_link(op, "https://some.url", path_to_key)
+                            parsed = urllib.parse.urlparse(attestation_link)
+                            params = urllib.parse.parse_qs(parsed.query)
+                            ticket_attestation = params['ticket'][0]
 
-                                ticket_attestation = params['ticket'][0]
-
-                                op.secret = ticket_attestation 
-                                op.save()
-
-                                att_is_valid = True
-                                regenerated_atts += 1
-                            except:
-                                pass
+                            op.secret = ticket_attestation 
+                            op.save()
+                            att_is_valid = True
+                            regenerated_atts += 1
+                        except:
+                            pass
 
                     if att_is_valid:
                         valid_atts += 1
@@ -92,9 +92,12 @@ class PluginSettingsView(EventSettingsViewMixin, FormView):
         kwargs = super().get_form_kwargs()
         try:
             kwargs["current_base_url"] = models.BaseURL.objects.get(event=self.request.event).string_url
-            kwargs["upload"] = models.KeyFile.objects.get(event=self.request.event).upload
         except models.BaseURL.DoesNotExist:
             kwargs["current_base_url"] = "Not set yet"
+
+        try:
+            kwargs["upload"] = models.KeyFile.objects.get(event=self.request.event).upload
+        except models.KeyFile.DoesNotExist:
             kwargs["upload"] = "Not uploaded yet"
 
         return kwargs

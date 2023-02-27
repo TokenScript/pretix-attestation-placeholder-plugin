@@ -25,16 +25,19 @@ class OrderAttestationPlaceholder(BaseMailTextPlaceholder):
         order = context['order']
         event = context["event"]
 
-        base_url = event_base_url(event)
-        path_to_key = get_private_key_path(event)
+        try:
 
-        for position in order.positions.all():
-            if position.attendee_email == order.email:
-                try:
+            base_url = event_base_url(event)
+            path_to_key = get_private_key_path(event)
+
+            for position in order.positions.all():
+                if position.attendee_email == order.email:
+                    
                     attestation_text = order_position_attestation_link(position, base_url, path_to_key)
                     return attestation_text
 
-                except Exception as e: return(e)   
+        except: 
+            return "'Could not generate attestation URL - please contact support team.'(error 6)"
 
     def render_sample(self, event):
         return "http://localhost/?ticket=MIGZMAoCAQYCAgTRA…"
@@ -57,15 +60,16 @@ class PositionAttestationPlaceholder(BaseMailTextPlaceholder):
         position = context["position"]
         event = context["event"]
 
-        base_url = event_base_url(event)
-        path_to_key = get_private_key_path(event)
-
         try:
+
+            base_url = event_base_url(event)
+            path_to_key = get_private_key_path(event)
+
             attestation_text = order_position_attestation_link(position, base_url, path_to_key)
-            print("Attestation generated: "+attestation_text)
             return attestation_text
             
-        except Exception as e: return(e)   
+        except: 
+            return "'Could not generate attestation URL - please contact support team.'(error 7)"
 
     def render_sample(self, event):
         return "http://localhost/?ticket=MIGZMAoCAQYCAgTRA…"

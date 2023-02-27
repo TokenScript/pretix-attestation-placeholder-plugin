@@ -21,6 +21,8 @@ from .generator.java_generator_wrapper import order_position_attestation_link, e
 
 import urllib.parse
 
+import secrets
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,7 +55,8 @@ class RandomTicketSecretGeneratorCustom(BaseTicketSecretGenerator):
     def generate_secret(self, item: Item, variation: ItemVariation = None, subevent: SubEvent = None,
                         attendee_name: str = None, current_secret: str = None, force_invalidate=False):
         # placeholder, this secret will be replaced later
-        return "_____"
+        # must be unique
+        return ''.join(secrets.choice("0123456789") for i in range(32))
 
 @receiver(register_ticket_secret_generators)
 def recv_classic(sender, **kwargs):
@@ -64,12 +67,19 @@ def update_ticket_secret(sender, **kwargs):
     order = kwargs['order']
     event = sender
 
-    base_url = event_base_url(event)
-    path_to_key = get_private_key_path(event)
+    base_url = ""
+    path_to_key = ""
 
-    if event.ticket_secret_generator.identifier == RandomTicketSecretGeneratorCustom.identifier:
-        for op in order.positions.all():
-            try: 
+    try:
+        base_url = event_base_url(event)
+        path_to_key = get_private_key_path(event)
+    except Exception as e:
+        print("Cant read key.")
+    
+    try:
+        if base_url and path_to_key and event.ticket_secret_generator.identifier == RandomTicketSecretGeneratorCustom.identifier:
+            for op in order.positions.all():
+                
                 attestation_link = order_position_attestation_link(op, base_url, path_to_key)
                 parsed = urllib.parse.urlparse(attestation_link)
                 params = urllib.parse.parse_qs(parsed.query)
@@ -79,6 +89,6 @@ def update_ticket_secret(sender, **kwargs):
                 op.secret = ticket_attestation 
                 op.save()
 
-            except Exception as e:
-                print("Cant update secret. Error: " + str(e))
+    except:
+        print("Cant update secret. Error: ")
             
