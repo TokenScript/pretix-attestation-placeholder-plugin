@@ -9,10 +9,25 @@
             <legend>{% trans "Attestation Plugin Settings" %}</legend>
             {% bootstrap_form form layout="horizontal" %}
         </fieldset>
+        {% if run_sign %}
+        <div class="oleh1">
+            <a href="{{ run_sign }}" class="btn btn-primary" >Validate MagicLinks</a>
+            <p></p>
+            <div class="alert alert-info" data-regenerate="{{regenerate_atts_url}}">
+                <p>Validation result: {{ validation_result }}</p>
+                {% if regenerate_atts_url %}
+                    <br/>
+                    <a href="{{ regenerate_atts_url }}" class="btn btn-primary" >Regenerate Invalid MagicLinks</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
         <div class="form-group submit-group">
             <button type="submit" class="btn btn-primary btn-save">
                 {% trans "Update" %}
             </button>
         </div>
     </form>
+    
+    
 {% endblock %}

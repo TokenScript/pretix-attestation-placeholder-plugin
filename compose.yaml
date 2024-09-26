@@ -1,0 +1,11 @@
+services:
+
+  mypretix:
+    image: mypretix
+    # image: olehhryb/pretix-plugin:v1.2
+    ports:
+      - 8345:80
+    volumes:
+      - /var/pretix-data:/data
+      - /etc/pretix:/etc/pretix
+
